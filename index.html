@@ -66,9 +66,9 @@ const dlg=h=>{$('#dlg').innerHTML=h;$('#dlg').showModal()},closeDlg=()=>$('#dlg'
 function toast(m,e){const t=$('#toast');t.textContent=m;t.className=e?'err show':'show';clearTimeout(toast.t);toast.t=setTimeout(()=>t.className='',3500)}
 async function q(p){const{data,error}=await p;if(error){toast(error.message,1);throw error}return data}
 const rpc=(fn,a)=>q(db.rpc(fn,a));
-let me,cart=[],P=[],PR=[],CAT=[],dsc=0,pd=0,busy=0;
+let me,cart=[],P=[],PR=[],CAT=[],CU=[],cu='',MR=[],UR=[],MT='customers',dsc=0,pd=0,busy=0;
 
-const R={dash:{t:'Dasbor',r:'akp',f:dash},pos:{t:'Kasir',r:'ak',f:pos},hist:{t:'Riwayat',r:'akp',f:hist},prod:{t:'Produk',r:'ap',f:prod},stok:{t:'Stok masuk',r:'ap',f:stok},kas:{t:'Kas',r:'ap',f:kas},lap:{t:'Laporan',r:'ap',f:lap}};
+const R={dash:{t:'Dasbor',r:'akp',f:dash},pos:{t:'Kasir',r:'ak',f:pos},hist:{t:'Riwayat',r:'akp',f:hist},prod:{t:'Produk',r:'ap',f:prod},stok:{t:'Stok masuk',r:'ap',f:stok},kas:{t:'Kas',r:'ap',f:kas},lap:{t:'Laporan',r:'ap',f:lap},mst:{t:'Data master',r:'ap',f:mst},usr:{t:'Pengguna',r:'a',f:usr}};
 function go(){let k=location.hash.slice(1)||'dash';const ok=x=>R[x].r.includes(me.role[0]);if(!R[k]||!ok(k))k='dash';
  $('#nav').innerHTML=Object.keys(R).filter(ok).map(x=>`<a href="#${x}" class="${x===k?'on':''}">${R[x].t}</a>`).join('');R[k].f()}
 addEventListener('hashchange',()=>me&&go());
@@ -92,7 +92,7 @@ async function dash(){
 
 /* ---------- Kasir (POS) ---------- */
 async function pos(){
- P=await q(db.from('products').select('id,name,sku,barcode,sell_price,stock,unit').eq('is_active',true).order('name'));cart=[];dsc=0;pd=0;
+ P=await q(db.from('products').select('id,name,sku,barcode,sell_price,stock,unit').eq('is_active',true).order('name'));CU=await q(db.from('customers').select('id,name').eq('is_active',true).order('name'));cart=[];dsc=0;pd=0;cu='';
  $('#main').innerHTML=`<div class=pos><div><input id=ps placeholder="Cari nama atau pindai barcode, lalu tekan Enter" oninput=posList() onkeydown="if(event.key==='Enter')posEnter()" autofocus><div id=pl class=plist></div></div><div class=cart><h2 style="margin-top:0">Keranjang</h2><div id=pc></div></div></div>`;posList();posCart()}
 function posList(){const s=($('#ps').value||'').toLowerCase();
  $('#pl').innerHTML=P.filter(p=>!s||p.name.toLowerCase().includes(s)||p.barcode===s||p.sku===s).slice(0,60).map(p=>`<button ${p.stock<1?'disabled':''} onclick="add('${p.id}')"><b>${esc(p.name)}</b><span>${rp(p.sell_price)}</span><small>Stok ${p.stock} ${esc(p.unit)}</small></button>`).join('')||'<p class=empty>Barang tidak ditemukan.</p>'}
@@ -103,12 +103,12 @@ function qty(id,d){const c=cart.find(x=>x.id===id);c.qty+=d;if(c.qty<1)cart=cart
 const sub=()=>cart.reduce((a,c)=>a+c.price*c.qty,0);
 function posCart(){
  $('#pc').innerHTML=(cart.map(c=>`<div class=ln><span>${esc(c.name)}<br><small>${rp(c.price)}</small></span><span class=q><button class=ghost onclick="qty('${c.id}',-1)">-</button>${c.qty}<button class=ghost style="margin:0 0 0 6px" onclick="qty('${c.id}',1)">+</button></span></div>`).join('')||'<p class=empty>Pilih barang di sebelah kiri.</p>')+
- `<hr><div class=ln><span>Subtotal</span><b id=st></b></div><label>Diskon (Rp)<input type=number min=0 value="${dsc||''}" oninput="dsc=+this.value;pcalc()"></label><div class=ln><span>Total</span><span class=tot id=tt></span></div>
+ `<hr><label>Pelanggan (opsional)<select onchange="cu=this.value"><option value="">Umum</option>${CU.map(c=>`<option value="${c.id}" ${c.id===cu?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label><div class=ln><span>Subtotal</span><b id=st></b></div><label>Diskon (Rp)<input type=number min=0 value="${dsc||''}" oninput="dsc=+this.value;pcalc()"></label><div class=ln><span>Total</span><span class=tot id=tt></span></div>
  <label>Uang diterima (Rp)<input type=number min=0 value="${pd||''}" oninput="pd=+this.value;pcalc()"></label><button type=button class=ghost onclick="pd=sub()-dsc;posCart()">Uang pas</button>
  <div class=ln><span>Kembalian</span><b id=cg></b></div><button style="width:100%" onclick=pay() ${cart.length?'':'disabled'}>Bayar</button>`;pcalc()}
 function pcalc(){const t=sub()-dsc;$('#st').textContent=rp(sub());$('#tt').textContent=rp(t);$('#cg').textContent=rp(Math.max(0,pd-t))}
 async function pay(){const t=sub()-dsc;if(pd<t)return toast('Uang diterima kurang dari total',1);if(busy)return;busy=1;
- try{const id=await rpc('checkout_sale',{p_items:cart.map(c=>({product_id:c.id,qty:c.qty})),p_discount:dsc,p_paid:pd});toast('Transaksi berhasil');await pos();receipt(id)}finally{busy=0}}
+ try{const id=await rpc('checkout_sale',{p_items:cart.map(c=>({product_id:c.id,qty:c.qty})),p_customer_id:cu||null,p_discount:dsc,p_paid:pd});toast('Transaksi berhasil');await pos();receipt(id)}finally{busy=0}}
 async function receipt(id){
  const[s]=await q(db.from('sales').select('*').eq('id',id)),it=await q(db.from('sale_items').select('*').eq('sale_id',id)),cf=Object.fromEntries((await q(db.from('settings').select('*'))).map(x=>[x.key,x.value]));
  dlg(`<div id=rc><h3>${esc(cf.coop_name)}</h3><p class=ctr>${esc(cf.coop_address)}</p><p>${esc(s.invoice_no)}<br>${dt(s.sale_date)}</p><hr>${it.map(i=>`<div class=ln><span>${esc(i.product_name)}<br><small>${i.qty} x ${rp(i.unit_price)}</small></span><span>${rp(i.subtotal)}</span></div>`).join('')}<hr>
@@ -171,6 +171,29 @@ async function runLap(e){e?.preventDefault();const a=$('[name=a]').value,b=$('[n
  tbl(['Barang','Terjual','Omzet','Laba kotor'],LAP.map(x=>[x.n,x.q,rp(x.r),rp(x.g)]),'Tidak ada penjualan pada periode ini.')+(r.length>=1000?'<p class=empty>Menampilkan 1.000 baris pertama; persempit periode untuk hasil lengkap.</p>':'')}
 function csv(){const t=['Barang,Terjual,Omzet,HPP,Laba kotor',...LAP.map(x=>[`"${x.n.replace(/"/g,'""')}"`,x.q,x.r,x.c,x.g].join(','))].join('\n');
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));a.download='laporan-siska.csv';a.click()}
+
+/* ---------- Data master ---------- */
+const MS={customers:{t:'Pelanggan',f:[['name','Nama'],['type','Jenis','select:siswa,guru,umum'],['class_unit','Kelas/Unit'],['phone','Telepon']]},suppliers:{t:'Supplier',f:[['name','Nama'],['phone','Telepon'],['address','Alamat']]},categories:{t:'Kategori',f:[['name','Nama']]}};
+async function mst(){const c=MS[MT],cat=MT==='categories';MR=await q(db.from(MT).select('*').order('name'));
+ $('#main').innerHTML=`<h1>Data master</h1><div class=bar>${Object.keys(MS).map(k=>`<button class="${k===MT?'':'ghost'}" onclick="MT='${k}';mst()">${MS[k].t}</button>`).join('')}<span style="flex:1"></span><button onclick="msForm()">Tambah ${c.t.toLowerCase()}</button></div>`+
+ tbl([...c.f.map(x=>x[1]),...(cat?[]:['Status']),''],MR.map(r=>[...c.f.map(x=>r[x[0]]),...(cat?[]:[r.is_active?'Aktif':'Nonaktif']),{h:`<button class=ghost onclick="msForm('${r.id}')">Ubah</button>`}]))}
+function msForm(id){const c=MS[MT],r=MR.find(x=>x.id===id)||{is_active:true};
+ dlg(`<h3>${id?'Ubah':'Tambah'} ${c.t.toLowerCase()}</h3><form onsubmit="msSave(event,'${id||''}')">${c.f.map(([k,l,s])=>`<label>${l}${s?`<select name=${k}>${s.slice(7).split(',').map(o=>`<option ${r[k]===o?'selected':''}>${o}</option>`).join('')}</select>`:`<input name=${k} value="${esc(r[k])}" ${k==='name'?'required':''}>`}</label>`).join('')}${MT==='categories'?'':`<label><input type=checkbox name=is_active style="width:auto" ${r.is_active?'checked':''}> Aktif</label>`}<div class=row><button type=button class=ghost onclick=closeDlg()>Batal</button><button>Simpan</button></div></form>`)}
+async function msSave(e,id){e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),b={};
+ MS[MT].f.forEach(([k])=>b[k]=(f[k]||'').trim()||null);if(MT!=='categories')b.is_active=!!f.is_active;
+ await q(id?db.from(MT).update(b).eq('id',id):db.from(MT).insert(b));closeDlg();toast('Tersimpan');mst()}
+
+/* ---------- Pengguna (admin) ---------- */
+async function usr(){UR=await q(db.from('profiles').select('*').order('created_at'));
+ $('#main').innerHTML=`<h1>Pengguna</h1><p class=empty>Akun baru dibuat di Supabase (Authentication, Users, Add user). Setelah itu atur peran dan aktifkan di sini.</p>`+
+ tbl(['Nama','Peran','Status',''],UR.map(u=>[u.full_name,u.role,u.is_active?'Aktif':'Belum aktif',{h:`<button class=ghost onclick="usrForm('${u.id}')">Ubah</button>`}]))}
+function usrForm(id){const u=UR.find(x=>x.id===id),self=id===me.id;
+ dlg(`<h3>Ubah pengguna</h3><form onsubmit="usrSave(event,'${id}')"><label>Nama<input name=full_name required value="${esc(u.full_name)}"></label>
+ <label>Peran<select name=role ${self?'disabled':''}>${['admin','kasir','pengurus'].map(r=>`<option ${r===u.role?'selected':''}>${r}</option>`).join('')}</select></label>
+ <label><input type=checkbox name=is_active style="width:auto" ${u.is_active?'checked':''} ${self?'disabled':''}> Akun aktif</label>${self?'<p class=empty>Peran dan status akun Anda sendiri tidak dapat diubah.</p>':''}
+ <div class=row><button type=button class=ghost onclick=closeDlg()>Batal</button><button>Simpan</button></div></form>`)}
+async function usrSave(e,id){e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),b={full_name:f.full_name.trim()};
+ if(f.role){b.role=f.role;b.is_active=!!f.is_active}await q(db.from('profiles').update(b).eq('id',id));closeDlg();toast('Pengguna diperbarui');usr()}
 
 boot();
 </script></body></html>
