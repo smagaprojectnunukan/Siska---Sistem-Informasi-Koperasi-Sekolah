@@ -72,7 +72,7 @@ async function q(p){const{data,error}=await p;if(error){toast(error.message,1);t
 const rpc=(fn,a)=>q(db.rpc(fn,a));
 let me,cart=[],P=[],PR=[],CAT=[],CU=[],cu='',MR=[],UR=[],MT='customers',dsc=0,pd=0,busy=0;
 
-const R={dash:{t:'Dasbor',r:'akp',f:dash},pos:{t:'Kasir',r:'ak',f:pos},hist:{t:'Riwayat',r:'akp',f:hist},prod:{t:'Produk',r:'ap',f:prod},stok:{t:'Stok masuk',r:'ap',f:stok},kas:{t:'Kas',r:'ap',f:kas},lap:{t:'Laporan',r:'ap',f:lap},mst:{t:'Data master',r:'ap',f:mst},usr:{t:'Pengguna',r:'a',f:usr}};
+const R={dash:{t:'Dasbor',r:'akp',f:dash},pos:{t:'Kasir',r:'ak',f:pos},hist:{t:'Riwayat',r:'akp',f:hist},prod:{t:'Produk',r:'ap',f:prod},stok:{t:'Stok masuk',r:'ap',f:stok},kas:{t:'Kas',r:'ap',f:kas},lap:{t:'Laporan',r:'ap',f:lap},mst:{t:'Data master',r:'ap',f:mst},usr:{t:'Pengguna',r:'a',f:usr},set:{t:'Pengaturan',r:'a',f:setg}};
 function go(){let k=location.hash.slice(1)||'dash';const ok=x=>R[x].r.includes(me.role[0]);if(!R[k]||!ok(k))k='dash';
  $('#nav').innerHTML=Object.keys(R).filter(ok).map(x=>`<a href="#${x}" class="${x===k?'on':''}">${R[x].t}</a>`).join('');R[k].f()}
 addEventListener('hashchange',()=>me&&go());
@@ -212,6 +212,13 @@ function usrForm(id){const u=UR.find(x=>x.id===id),self=id===me.id;
  <div class=row><button type=button class=ghost onclick=closeDlg()>Batal</button><button>Simpan</button></div></form>`)}
 async function usrSave(e,id){e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),b={full_name:f.full_name.trim()};
  if(f.role){b.role=f.role;b.is_active=!!f.is_active}await q(db.from('profiles').update(b).eq('id',id));closeDlg();toast('Pengguna diperbarui');usr()}
+
+/* ---------- Pengaturan koperasi (admin) ---------- */
+const SF=[['coop_name','Nama koperasi / sekolah'],['coop_address','Alamat'],['receipt_footer','Pesan penutup struk'],['kasir_max_discount_pct','Batas diskon kasir (% dari subtotal)']];
+async function setg(){const c=Object.fromEntries((await q(db.from('settings').select('*'))).map(x=>[x.key,x.value]));
+ $('#main').innerHTML=`<h1>Pengaturan koperasi</h1><form onsubmit=setSave(event) style="max-width:480px">${SF.map(([k,l])=>`<label>${l}<input name=${k} value="${esc(c[k])}" ${k==='kasir_max_discount_pct'?'type=number min=0 max=100 step=any':''}></label>`).join('')}<p class=empty>Isi batas diskon 0 bila kasir tidak boleh memberi diskon.</p><button>Simpan pengaturan</button></form>`}
+async function setSave(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
+ await q(db.from('settings').upsert(SF.map(([k])=>({key:k,value:String(f[k]??'').trim()}))));toast('Pengaturan tersimpan')}
 
 boot();
 </script></body></html>
